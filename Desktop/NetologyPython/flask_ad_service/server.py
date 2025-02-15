@@ -6,8 +6,16 @@ from sqlalchemy.exc import IntegrityError
 from errors import HttpError
 from schema import validate, UpdateUserRequest, CreateUserRequest
 from werkzeug.datastructures import ImmutableMultiDict
+from flask_bcrypt import Bcrypt
 
 app = flask.Flask('add_service_app')
+bcrypt = Bcrypt(app)
+
+def hash_password(password: str):
+    password = password.encode()
+    hashed_password = bcrypt.generate_password_hash(password)
+    hashed_password = password.decode()
+    return hashed_password
 
 
 @app.before_request
@@ -52,12 +60,14 @@ class UserView(MethodView):
 
     def post(self):
         user_json = validate(request.json, CreateUserRequest)
-        user = User(name=user_json['name'], password=user_json['password'], email=user_json['email'])
+        user = User(name=user_json['name'], password=hash_password(user_json['password']), email=user_json['email'])
         add_user(user)
         return jsonify(user.dict)
 
     def patch(self, user_id: int):
         user_json = validate(request.json, UpdateUserRequest)
+        if 'password' in user_json:
+            user_json['password'] = hash_password(user_json['password'])
         user = get_user_by_id(user_id)
         for filed, value in user_json.items():
             setattr(user, filed, value)
